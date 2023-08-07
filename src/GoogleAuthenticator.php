@@ -29,22 +29,16 @@ class GoogleAuthenticator
         if ($secretLength < 16 || $secretLength > 128) {
             throw new Exception('Bad secret length');
         }
-        $secret = '';
-        $rnd = false;
-        if (function_exists('random_bytes')) {
-            $rnd = random_bytes($secretLength);
-        } elseif (function_exists('openssl_random_pseudo_bytes')) {
-            $rnd = openssl_random_pseudo_bytes($secretLength, $cryptoStrong);
-            if (!$cryptoStrong) {
-                $rnd = false;
-            }
+        if (($secretLength & ($secretLength - 1)) !== 0) {
+            throw new Exception('This secret key is not compatible with Google Authenticator.');
         }
-        if ($rnd !== false) {
-            for ($i = 0; $i < $secretLength; ++$i) {
-                $secret .= $validChars[ord($rnd[$i]) & 31];
+        $secret = '';
+        for ($i = 0; $i < $secretLength; ++$i) {
+            if (function_exists('random_int')) {
+                $secret .= $validChars[random_int(0, 31)];
+            } else {
+                $secret .= $validChars[mt_rand(0, 31)];
             }
-        } else {
-            throw new Exception('No source of secure random');
         }
 
         return $secret;
@@ -56,13 +50,13 @@ class GoogleAuthenticator
      */
     protected function _getBase32LookupTable(): array
     {
-        return array(
+        return [
             'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', //  7
             'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', // 15
             'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', // 23
             'Y', 'Z', '2', '3', '4', '5', '6', '7', // 31
             '=',  // padding char
-        );
+        ];
     }
 
     /**
@@ -130,7 +124,6 @@ class GoogleAuthenticator
         if ($timeSlice === null) {
             $timeSlice = floor(time() / 30);
         }
-
         $secretKey = $this->_base32Decode($secret);
 
         // Pack time into binary string
@@ -148,9 +141,7 @@ class GoogleAuthenticator
         // Only 32 bits
         $value = $value & 0x7FFFFFFF;
 
-        $modulo = pow(10, $this->_codeLength);
-
-        return str_pad($value % $modulo, $this->_codeLength, '0', STR_PAD_LEFT);
+        return str_pad(substr((string)$value, -$this->_codeLength), $this->_codeLength, '0', STR_PAD_LEFT);
     }
 
     /**
@@ -217,12 +208,11 @@ class GoogleAuthenticator
         $safeLen = strlen($safeString);
         $userLen = strlen($userString);
 
-        if ($userLen != $safeLen) {
+        if ($userLen !== $safeLen) {
             return false;
         }
 
         $result = 0;
-
         for ($i = 0; $i < $userLen; ++$i) {
             $result |= (ord($safeString[$i]) ^ ord($userString[$i]));
         }
@@ -239,7 +229,6 @@ class GoogleAuthenticator
     public function setCodeLength(int $length): GoogleAuthenticator
     {
         $this->_codeLength = $length;
-
         return $this;
     }
 }
